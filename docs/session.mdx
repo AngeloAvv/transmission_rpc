@@ -1,0 +1,214 @@
+---
+title: Session
+description: Reading and changing daemon settings, statistics, free space, the blocklist, the port test and bandwidth groups.
+---
+
+# Session
+
+## Reading the settings
+
+`session()` returns the daemon's whole settings object. It is also what teaches the client
+which RPC dialect the daemon speaks, so calling it once after connecting is a good habit.
+
+```dart
+final session = await transmission.session();
+
+print(session.version);          // "4.1.0 (5f1c7b3f4a)"
+print(session.rpcVersion);       // 18
+print(session.downloadDir);      // "/mnt/media/downloads"
+print(session.speedLimitDown);   // 1000  (KB/s)
+print(session.encryption);       // SessionEncryption.preferred
+```
+
+Every field of `Session` is nullable — daemons omit settings they do not have. Useful
+ones include `downloadDir`, `incompleteDir`, `configDir`, `blocklistEnabled`,
+`blocklistSize`, `peerPort`, `peerLimitGlobal`, `seedRatioLimit`, `downloadQueueSize`,
+`rpcVersionMinimum`, `rpcVersionSemver`, `preferredTransports` and `units`.
+
+## Changing the settings
+
+`setSession` sends only the arguments you pass.
+
+```dart
+await transmission.setSession(
+  downloadDir: '/mnt/media/downloads',
+  startAddedTorrents: false,
+  encryption: SessionEncryption.required,
+);
+```
+
+### Speed limits
+
+Global limits are in KB/s and each has its own enable flag:
+
+```dart
+await transmission.setSession(
+  speedLimitDown: 2000,
+  speedLimitDownEnabled: true,
+  speedLimitUp: 200,
+  speedLimitUpEnabled: true,
+);
+```
+
+### Alternative speed ("turtle mode")
+
+The alt-speed settings are a second pair of limits that can be switched on by hand or on
+a schedule.
+
+```dart
+// Turtle mode on, right now.
+await transmission.setSession(
+  altSpeedDown: 200,
+  altSpeedUp: 50,
+  altSpeedEnabled: true,
+);
+```
+
+```dart
+// Or on a schedule: 01:00–07:00 (minutes after midnight), every day.
+await transmission.setSession(
+  altSpeedDown: 200,
+  altSpeedUp: 50,
+  altSpeedTimeBegin: 60,
+  altSpeedTimeEnd: 420,
+  altSpeedTimeDay: 127, // bitfield, 127 = all seven days
+  altSpeedTimeEnabled: true,
+);
+```
+
+### Queues and seeding
+
+```dart
+await transmission.setSession(
+  downloadQueueEnabled: true,
+  downloadQueueSize: 3,
+  seedQueueEnabled: true,
+  seedQueueSize: 5,
+  seedRatioLimit: 2.0,
+  seedRatioLimited: true,
+  idleSeedingLimit: 30,
+  idleSeedingLimitEnabled: true,
+);
+```
+
+`setSession` also covers peer settings (`peerPort`, `peerPortRandomOnStart`,
+`peerLimitGlobal`, `peerLimitPerTorrent`, `pexEnabled`, `dhtEnabled`, `lpdEnabled`,
+`portForwardingEnabled`), paths (`incompleteDir`, `incompleteDirEnabled`,
+`renamePartialFiles`, `trashOriginalTorrentFiles`), the blocklist
+(`blocklistEnabled`, `blocklistUrl`), the done/added scripts
+(`scriptTorrentAddedEnabled`/`Filename`, `scriptTorrentDoneEnabled`/`Filename`,
+`scriptTorrentDoneSeedingEnabled`/`Filename`), `cacheSizeMib`, `defaultTrackers`,
+`sequentialDownload`, `queueStalledEnabled`/`queueStalledMinutes` and
+`preferredTransports`.
+
+`tcpEnabled` and `utpEnabled` are still accepted but deprecated: Transmission 4.1
+replaced both with `preferredTransports`, a priority-ordered list of transport names.
+
+```dart
+// Transmission 4.1+: say which transports to prefer, in order.
+await transmission.setSession(preferredTransports: ['utp', 'tcp']);
+```
+
+The daemon still reports the old flags, so `session.tcpEnabled` and `session.utpEnabled`
+are readable as well.
+
+## Statistics
+
+```dart
+final stats = await transmission.sessionStats();
+
+print('${stats.torrentCount} torrents, ${stats.activeTorrentCount} active');
+print('down ${stats.downloadSpeed} B/s, up ${stats.uploadSpeed} B/s');
+
+final all = stats.cumulativeStats;
+print('all time: ${all?.downloadedBytes} down in ${all?.sessionCount} sessions');
+
+final now = stats.currentStats;
+print('this session: ${now?.uploadedBytes} up in ${now?.secondsActive}s');
+```
+
+## Free space
+
+```dart
+final space = await transmission.freeSpace('/mnt/media');
+
+print('${space.path}: ${space.sizeBytes} bytes free');
+print('of ${space.totalSize} bytes');  // null before Transmission 4.0
+```
+
+The path is interpreted on the daemon's machine, not yours.
+
+## Blocklist
+
+`blocklist()` tells the daemon to download the blocklist at its configured
+`blocklist-url` and returns how many rules it now holds.
+
+```dart
+await transmission.setSession(
+  blocklistUrl: 'https://example.org/blocklist.gz',
+  blocklistEnabled: true,
+);
+
+final rules = await transmission.blocklist();
+print('blocklist now holds $rules rules');
+```
+
+## Port test
+
+```dart
+final result = await transmission.testPort(IpProtocol.ipv4);
+
+print(result.portIsOpen);  // true when the peer port is reachable
+print(result.ipProtocol);  // null on daemons older than Transmission 4.0
+```
+
+Pass `IpProtocol.ipv6` to test the other stack. Older daemons ignore the protocol
+argument and test whatever they are listening on.
+
+## Shutting the daemon down
+
+```dart
+await transmission.closeSession();
+```
+
+This stops the Transmission daemon itself. Subsequent calls will fail with a
+`NetworkError`.
+
+## Bandwidth groups
+
+Bandwidth groups are a Transmission 4.0+ feature: a named pair of speed limits that any
+number of torrents can share.
+
+```dart
+final groups = await transmission.groups();
+
+for (final group in groups) {
+  print('${group.name}: '
+      'down ${group.speedLimitDown} (${group.speedLimitDownEnabled}), '
+      'up ${group.speedLimitUp} (${group.speedLimitUpEnabled}), '
+      'honors session limits: ${group.honorsSessionLimits}');
+}
+```
+
+`setGroup` creates the group if it does not exist yet and updates it if it does. All of
+its arguments are required.
+
+```dart
+await transmission.setGroup(
+  name: 'night',
+  honorsSessionLimits: false,
+  speedLimitDownEnabled: true,
+  speedLimitDown: 5000,
+  speedLimitUpEnabled: true,
+  speedLimitUp: 500,
+);
+```
+
+Assign torrents to it with [`setTorrents`](/torrents):
+
+```dart
+await transmission.setTorrents(ids: [12, 13], group: 'night');
+```
+
+On daemons older than 4.0 these two methods fail with an [`RpcError`](/errors), since
+`group-get` and `group-set` do not exist there.

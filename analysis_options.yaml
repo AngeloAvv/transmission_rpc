@@ -1,0 +1,13 @@
+include: package:lints/recommended.yaml
+
+linter:
+  rules:
+    - prefer_final_locals
+    - unawaited_futures
+
+analyzer:
+  errors:
+    todo: warning
+    # The package still supports Dart 3.8, which has no null-aware elements.
+    use_null_aware_elements: ignore
+    dead_code: error

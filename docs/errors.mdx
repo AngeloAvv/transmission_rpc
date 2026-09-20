@@ -1,0 +1,95 @@
+---
+title: Errors
+description: The sealed TransmissionException hierarchy — AuthenticationError, RpcError and NetworkError — and what triggers each one.
+---
+
+# Errors
+
+Every method on `Transmission` throws one of three exceptions, all of them subtypes of the
+sealed base class `TransmissionException`:
+
+```
+TransmissionException  (sealed, implements Exception)
+├── AuthenticationError
+├── RpcError            (adds int? code)
+└── NetworkError
+```
+
+All three implement `Exception` rather than `Error`: they are recoverable conditions a
+caller is expected to catch, not programmer mistakes. Each carries a human-readable
+`message`, and an optional `cause` holding the lower-level exception it wraps (usually a
+`DioException`).
+
+## Handling them
+
+Because the base class is `sealed`, a `switch` over it is exhaustive — the compiler tells
+you if a case is missing, and no default branch is needed.
+
+```dart
+try {
+  final torrents = await transmission.torrents();
+  render(torrents);
+} on TransmissionException catch (e) {
+  final message = switch (e) {
+    AuthenticationError() => 'Check your username and password.',
+    RpcError(:final code) when code == -32601 =>
+      'This daemon is too old to support that call.',
+    RpcError(:final message) => 'The daemon refused the request: $message',
+    NetworkError() => 'Could not reach the daemon — is it running?',
+  };
+  showError(message);
+}
+```
+
+Catching a single kind works as usual:
+
+```dart
+try {
+  await transmission.session();
+} on AuthenticationError {
+  await promptForCredentials();
+}
+```
+
+## AuthenticationError
+
+Thrown when the daemon answers HTTP 401. Typically the `username`/`password` passed to
+the `Transmission` constructor are missing or wrong — note that both must be supplied for
+the basic-auth header to be sent at all.
+
+```text
+AuthenticationError: Authentication failed (HTTP 401)
+```
+
+## RpcError
+
+Thrown when the daemon answered but the call itself failed. Three situations produce it:
+
+- a **non-401 HTTP error** (500, 404, a reverse proxy in the way) — `code` is null unless
+  the body happened to carry a JSON-RPC error object;
+- a **legacy `result` other than `"success"`** — for instance
+  `"torrent-add: unrecognized info"` or `"invalid argument"` — `code` is null, since the
+  legacy protocol has no error codes;
+- a **JSON-RPC 2.0 error object** on Transmission 4.1+, where `code` is the JSON-RPC code
+  (for example `-32601` for "method not found", `-32602` for "invalid params").
+
+```text
+RpcError(-32601): Method not found
+RpcError(null): torrent-add: unrecognized info
+```
+
+`code` is therefore a hint, not a contract: only check it when you know you are talking to
+a daemon speaking RPC 18+ (see [Compatibility](/compatibility)). Calling a method the
+daemon does not have — `groups()` against a Transmission 3.x daemon, say — lands here.
+
+## NetworkError
+
+Thrown when the request never reached the daemon at all: connection refused, DNS failure,
+a `timeout` elapsing, a bad TLS certificate, or a cancelled request.
+
+```text
+NetworkError: Connection refused
+```
+
+A `NetworkError` is the one worth retrying automatically; an `RpcError` or an
+`AuthenticationError` will generally fail again in exactly the same way.

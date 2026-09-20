@@ -1,0 +1,173 @@
+---
+title: Compatibility
+description: How transmission_rpc supports both the legacy Transmission RPC protocol and the JSON-RPC 2.0 dialect of Transmission 4.1+.
+---
+
+# Compatibility
+
+One client, every daemon. `transmission_rpc` works against Transmission 2.x, 3.x,
+4.0 and 4.1+, and nothing about that is visible in the public API: you call
+`torrents()` and get `Torrent` objects, whichever protocol the daemon on the other end
+speaks.
+
+## What changed in Transmission 4.1
+
+Transmission 4.1 bumped its RPC version to **18** and changed the protocol in two ways at
+once.
+
+**The envelope became JSON-RPC 2.0.** Where RPC 17 and earlier send
+
+```json
+{ "method": "torrent-get", "arguments": { "fields": ["id", "name"] } }
+```
+
+and answer with `{"result": "success", "arguments": {...}}`, RPC 18 sends
+
+```json
+{ "jsonrpc": "2.0", "method": "torrent_get", "params": { "fields": ["id", "name"] }, "id": 1 }
+```
+
+and answers with `{"jsonrpc": "2.0", "result": {...}, "id": 1}` — or with a JSON-RPC
+`error` object carrying a numeric `code`, which is where [`RpcError.code`](/errors) comes
+from. Note the method name itself: hyphens became underscores.
+
+**Every field was renamed to snake_case.** The legacy protocol mixed camelCase for
+torrent fields with kebab-case for session fields; RPC 18 uses `snake_case` throughout.
+
+| Legacy (RPC < 18) | Modern (RPC >= 18) |
+| --- | --- |
+| `percentDone` | `percent_done` |
+| `leftUntilDone` | `left_until_done` |
+| `errorString` | `error_string` |
+| `magnetLink` | `magnet_link` |
+| `downloadDir` (torrent) | `download_dir` |
+| `download-dir` (session) | `download_dir` |
+| `alt-speed-down` | `alt_speed_down` |
+| `cache-size-mb` | `cache_size_mib` |
+| `delete-local-data` | `delete_local_data` |
+| `port-is-open` | `port_is_open` |
+
+Some fields did not change at all — `id`, `ids`, `name`, `eta`, `files`, `paused`,
+`fields` are spelled the same in both dialects. And a few changed meaning rather than
+just spelling: `cache-size-mb` became `cache_size_mib`, and `utp-enabled` and
+`tcp-enabled` were dropped in favour of `preferred_transports`.
+
+There is a third category: fields that only ever existed from RPC 18 on — they were born
+`snake_case` and have no legacy spelling at all. `webseeds_ex`,
+`sequential_download_from_piece`, `peer_id`, `supports_holepunch`, `from_holepunch` and
+`downloader_count` are declared with `WireKey.same`, so the same name goes out and comes
+back whichever version is detected. Older daemons simply do not know them: requesting one
+is harmless, and the corresponding `Torrent` field stays null.
+
+The authoritative description lives in the
+[Transmission RPC spec](https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md).
+
+## How detection works
+
+The client starts out assuming **RPC 17**, the last version that used the legacy
+envelope. Guessing low is always safe: every Transmission build, 4.1 included, still
+understands the legacy protocol, whereas guessing high breaks older daemons.
+
+It then upgrades itself the moment the daemon reveals a newer version, from either of two
+places:
+
+1. **The 409 handshake.** Transmission answers the first request with
+   `409 Conflict` to hand out an `X-Transmission-Session-Id` CSRF token (the client stores
+   it and replays the request transparently). Newer daemons put an
+   `X-Transmission-Rpc-Version` header on that same response — either a bare integer
+   (`18`) or a semver (`6.0.0`, where a major of 6 means Transmission 4.1+). Both are
+   recognised, so detection usually happens on the very first call.
+2. **A `session-get` response.** `rpc-version` / `rpc_version` and
+   `rpc-version-semver` / `rpc_version_semver` are read out of every response that carries
+   them. This is why calling [`session()`](/session) once after connecting is a good
+   habit — it is guaranteed to settle the question.
+
+The detected version only ever goes up: once the client has seen an 18, it never falls
+back.
+
+## Reading what was detected
+
+```dart
+final transmission = Transmission(baseUrl: 'http://nas.local:9091/transmission/rpc');
+
+await transmission.session();
+
+print(transmission.rpcVersion);        // int, e.g. 18
+print(transmission.rpcVersionSemver);  // String?, e.g. "6.0.0"
+```
+
+- `rpcVersion` is `17` until a newer version is detected. A value of `18` or above means
+  the daemon speaks the JSON-RPC 2.0 dialect. Because 17 is the *assumed* starting point,
+  a `17` means either "an older daemon" or "nothing has been detected yet" — it is not a
+  positive claim.
+- `rpcVersionSemver` is the RPC semver string the daemon reports (for example `6.0.0`),
+  and is `null` until a call that carries it — such as `session()` — has completed. It is
+  the RPC protocol's own version, not the Transmission release number; for the latter, read
+  `Session.version`.
+
+## The WireKey mechanism
+
+The whole compatibility layer is one small class. Every field the library touches is
+declared exactly once as a `WireKey` holding both spellings:
+
+```dart
+class WireKey {
+  final String legacy;   // RPC < 18
+  final String modern;   // RPC >= 18
+
+  const WireKey(this.legacy, this.modern);
+  const WireKey.same(String name) : legacy = name, modern = name;
+
+  String forVersion(int rpcVersion) => rpcVersion >= 18 ? modern : legacy;
+}
+```
+
+`WireKey` is exported, so you can inspect the mapping the library uses:
+
+```dart
+print(TorrentField.percentDone.key.legacy);           // percentDone
+print(TorrentField.percentDone.key.modern);           // percent_done
+print(TorrentField.percentDone.wireName(17));         // percentDone
+print(TorrentField.percentDone.wireName(18));         // percent_done
+```
+
+It is used asymmetrically, and that asymmetry is the point:
+
+- **Writing** (requests) consults the detected version and picks one spelling —
+  `forVersion(rpcVersion)`.
+- **Reading** (responses) tries the modern name first and falls back to the legacy one,
+  for every field, always. Parsing therefore never depends on the detected version at all:
+  a response from a 3.x daemon parses exactly as well as one from a 4.1 daemon, and a
+  misdetected version cannot corrupt a read.
+
+This is also why enum values are normalised on the way in: `SessionEncryption.fromWire`
+accepts the pre-2.x `tolerated` as an alias of `allowed`, and boolean-ish fields accept
+`0`/`1` as well as `true`/`false`, since older daemons send integers for some flags.
+
+## Version-specific features
+
+A few methods depend on a feature the daemon may not have. They are ordinary calls, so a
+daemon that lacks them answers with an error and you get an [`RpcError`](/errors):
+
+| Feature | Requires |
+| --- | --- |
+| `groups()`, `setGroup()`, `setTorrents(group: ...)` | Transmission 4.0+ |
+| `setTorrents(trackerList: ...)` | Transmission 4.0+ |
+| `TestPort.ipProtocol`, `testPort(IpProtocol...)` | Transmission 4.0+ (older daemons ignore it) |
+| `FreeSpace.totalSize` | Transmission 4.0+ (null otherwise) |
+| `setSession(preferredTransports: ...)` | Transmission 4.1+ |
+| `setSession(tcpEnabled: ...)`, `setSession(utpEnabled: ...)` | deprecated in Transmission 4.1 |
+| `setTorrents(sequentialDownloadFromPiece: ...)`, `TorrentField.sequentialDownloadFromPiece` | Transmission 4.1+ (RPC 18) |
+| `Peer.peerId`, `Peer.supportsHolepunch`, `PeersFrom.fromHolepunch`, `TrackerStats.downloaderCount` | Transmission 4.1+ (null otherwise) |
+| `Torrent.webseedsEx`, `TorrentField.webseedsEx` | Transmission 4.2 (null otherwise) |
+| `setTorrents(trackerAdd/Remove/Replace: ...)` | removed in Transmission 4.0 |
+
+Guard on the detected version when you need to branch:
+
+```dart
+final session = await transmission.session();
+
+if (transmission.rpcVersion >= 18) {
+  await transmission.setSession(preferredTransports: ['utp', 'tcp']);
+}
+```

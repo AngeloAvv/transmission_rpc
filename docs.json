@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.page/schema.json",
+  "name": "transmission_rpc",
+  "description": "A dependency-light Dart RPC client for the Transmission BitTorrent daemon.",
+  "theme": {
+    "primary": "#B71C1C"
+  },
+  "social": {
+    "github": "https://github.com/AngeloAvv/transmission_rpc"
+  },
+  "sidebar": [
+    {
+      "group": "Overview",
+      "pages": [
+        { "title": "Introduction", "href": "/" },
+        { "title": "Getting started", "href": "/getting-started" }
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        { "title": "Torrents", "href": "/torrents" },
+        { "title": "Session", "href": "/session" },
+        { "title": "Errors", "href": "/errors" },
+        { "title": "Compatibility", "href": "/compatibility" }
+      ]
+    }
+  ]
+}

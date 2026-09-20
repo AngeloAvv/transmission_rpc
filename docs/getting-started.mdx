@@ -1,0 +1,134 @@
+---
+title: Getting started
+description: Connecting to a Transmission daemon — authentication, logging, timeouts and supplying your own Dio client.
+---
+
+# Getting started
+
+## Connecting
+
+Everything starts with a `Transmission` instance:
+
+```dart
+import 'package:transmission_rpc/transmission_rpc.dart';
+
+final transmission = Transmission(
+  baseUrl: 'http://nas.local:9091/transmission/rpc',
+);
+```
+
+`baseUrl` defaults to `http://localhost:9091/transmission/rpc`, so a daemon on the same
+machine with default settings needs no arguments at all:
+
+```dart
+final transmission = Transmission();
+```
+
+The URL must be the full RPC endpoint, including the `/transmission/rpc` path.
+
+The constructor performs no I/O — nothing is contacted until you call a method. A good
+first call is [`session()`](/session), which also teaches the client which RPC dialect
+the daemon speaks:
+
+```dart
+final session = await transmission.session();
+print(session.version);              // e.g. 4.1.0 (5f1c7b3f4a)
+print(transmission.rpcVersion);      // e.g. 18
+print(transmission.rpcVersionSemver); // e.g. 6.0.0
+```
+
+## Authentication
+
+When the daemon has `rpc-authentication-required` turned on, pass both credentials; they
+are sent as HTTP basic auth on every request.
+
+```dart
+final transmission = Transmission(
+  baseUrl: 'http://nas.local:9091/transmission/rpc',
+  username: 'transmission',
+  password: 'hunter2',
+);
+```
+
+Wrong or missing credentials produce an `AuthenticationError` — see [Errors](/errors).
+
+## Logging
+
+Logging is **off** unless you ask for it. Passing a `logLevel` switches on request,
+response and error logging through [talker](https://pub.dev/packages/talker):
+
+```dart
+final transmission = Transmission(
+  baseUrl: 'http://nas.local:9091/transmission/rpc',
+  logLevel: LogLevel.debug,
+);
+```
+
+`LogLevel` is re-exported from `package:transmission_rpc/transmission_rpc.dart`,
+so you do not need to depend on `talker` directly.
+
+If your app already has a `Talker` instance, hand it over and the client will log into it
+instead of creating a private one:
+
+```dart
+final talker = Talker();
+
+final transmission = Transmission(
+  logLevel: LogLevel.info,
+  talker: talker,
+);
+```
+
+> **Note:** `talker` alone does nothing — logging stays off until `logLevel` is non-null.
+> Only `LogLevel` is re-exported; the `Talker` class itself comes from
+> `package:talker/talker.dart`, which you already depend on in that case.
+
+## Timeouts
+
+`timeout` applies to connect, send and receive, and defaults to 30 seconds.
+
+```dart
+final transmission = Transmission(
+  baseUrl: 'http://nas.local:9091/transmission/rpc',
+  timeout: const Duration(seconds: 5),
+);
+```
+
+A timeout surfaces as a `NetworkError`.
+
+## Supplying your own Dio
+
+Pass `httpClient` when you need to control the underlying HTTP stack — a proxy, a custom
+certificate, an extra interceptor, or a fake adapter in tests. The `baseUrl`, `timeout`
+and basic-auth header are applied to the instance you provide, and the CSRF and
+version-detection interceptors are added to it.
+
+```dart
+import 'package:dio/dio.dart';
+
+final dio = Dio();
+dio.interceptors.add(MyRetryInterceptor());
+
+final transmission = Transmission(
+  baseUrl: 'https://nas.local:9091/transmission/rpc',
+  httpClient: dio,
+);
+```
+
+## Flutter and CLI
+
+The package is pure Dart and has no Flutter dependency, so it works in a CLI, a server,
+or a Flutter app.
+
+- **CLI / server**: build the `Transmission` where you need it. Reading the host and
+  credentials from `Platform.environment` keeps secrets out of the source — see the
+  [example](https://github.com/AngeloAvv/transmission_rpc/blob/main/example/transmission_rpc_example.dart).
+- **Flutter**: build one `Transmission` and keep it for the lifetime of the app (in a
+  repository, a provider, a singleton) rather than one per widget rebuild. The detected
+  RPC version is cached on the instance, and so is the CSRF token, so a long-lived client
+  avoids re-handshaking on every call. Polling `torrents()` on a `Timer.periodic` is the
+  usual way to drive a live list; keep the field list small (see
+  [Torrents](/torrents)) to keep the payload small.
+- **Flutter web** is subject to CORS and to the browser blocking the
+  `X-Transmission-Session-Id` header unless the daemon (or a reverse proxy in front of
+  it) is configured to allow it.

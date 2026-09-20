@@ -1,0 +1,352 @@
+---
+title: Torrents
+description: Listing, adding, removing, moving, renaming and controlling torrents with transmission_rpc.
+---
+
+# Torrents
+
+Every method in this page is on the `Transmission` instance you built in
+[Getting started](/getting-started), and every one of them may throw a
+[`TransmissionException`](/errors).
+
+Methods that act on torrents take a `List<int>` of torrent ids — the `id` field of a
+`Torrent`.
+
+## Listing torrents
+
+```dart
+final torrents = await transmission.torrents();
+
+for (final torrent in torrents) {
+  print('${torrent.name}  ${torrent.status}  ${torrent.percentDone}');
+}
+```
+
+Every field of `Torrent` is nullable: a torrent only carries the fields that were
+requested, and older daemons omit fields they do not know about.
+
+### Choosing fields
+
+`torrents()` asks for `TorrentField.defaults` — a 20-field set covering what a torrent
+list usually shows (`id`, `name`, `eta`, `queuePosition`, `downloadDir`, `isFinished`,
+`isStalled`, `leftUntilDone`, `metadataPercentComplete`, `error`, `errorString`,
+`percentDone`, `totalSize`, `peersConnected`, `sizeWhenDone`, `status`, `rateDownload`,
+`rateUpload`, `peersGettingFromUs`, `peersSendingToUs`).
+
+Pass your own list to fetch less (faster, smaller payloads) or more:
+
+```dart
+final torrents = await transmission.torrents(
+  fields: [
+    TorrentField.id,
+    TorrentField.name,
+    TorrentField.percentDone,
+    TorrentField.status,
+    TorrentField.rateDownload,
+  ],
+);
+```
+
+To fetch heavy detail for a single torrent's screen, add the expensive fields explicitly:
+
+```dart
+final detailed = await transmission.torrents(
+  fields: [
+    ...TorrentField.defaults,
+    TorrentField.files,
+    TorrentField.fileStats,
+    TorrentField.trackerStats,
+    TorrentField.peers,
+    TorrentField.labels,
+  ],
+);
+```
+
+`TorrentField` covers the whole `torrent-get` field set — see the enum in
+`package:transmission_rpc/transmission_rpc.dart` for the full list.
+
+### Torrent status
+
+`Torrent.status` is a `TorrentStatus` enum: `stopped`, `checkWait`, `check`,
+`downloadWait`, `download`, `seedWait`, `seed`. Its `code` getter gives the integer the
+protocol uses, and `TorrentStatus.fromCode` parses one back.
+
+```dart
+final label = switch (torrent.status) {
+  TorrentStatus.stopped => 'Paused',
+  TorrentStatus.checkWait || TorrentStatus.check => 'Verifying',
+  TorrentStatus.downloadWait || TorrentStatus.download => 'Downloading',
+  TorrentStatus.seedWait || TorrentStatus.seed => 'Seeding',
+  null => 'Unknown',
+};
+```
+
+### Only what changed
+
+`activeTorrents()` uses the daemon's `recently-active` filter and returns the torrents
+that changed since the previous call. It takes the same `fields` argument and is the
+cheap way to keep a live list up to date.
+
+```dart
+// Full list once...
+var torrents = await transmission.torrents();
+
+// ...then only the deltas.
+final changed = await transmission.activeTorrents();
+```
+
+## Files, peers, trackers and webseeds
+
+The heavier `TorrentField`s come back as lists of typed objects.
+
+```dart
+final detail = (await transmission.torrents(
+  fields: [
+    TorrentField.id,
+    TorrentField.files,
+    TorrentField.fileStats,
+    TorrentField.peers,
+    TorrentField.peersFrom,
+    TorrentField.trackerStats,
+    TorrentField.webseedsEx,
+  ],
+)).first;
+
+// `files` entries are `TorrentFile` — named so it does not collide with
+// `dart:io`'s `File`. `fileStats` lines up with it positionally.
+for (final file in detail.files ?? const <TorrentFile>[]) {
+  print('${file.name}  ${file.bytesCompleted}/${file.length}');
+}
+
+for (final peer in detail.peers ?? const <Peer>[]) {
+  print('${peer.address}:${peer.port} ${peer.clientName}'
+      ' id=${peer.peerId}'                       // Transmission 4.1+
+      ' holepunch=${peer.supportsHolepunch}'     // Transmission 4.1+
+      ' got=${peer.bytesToClient} sent=${peer.bytesToPeer}');
+}
+
+print(detail.peersFrom?.fromHolepunch);          // Transmission 4.1+
+
+for (final tracker in detail.trackerStats ?? const <TrackerStats>[]) {
+  print('${tracker.host} seeders=${tracker.seederCount}'
+      ' downloaders=${tracker.downloaderCount}'); // Transmission 4.1+
+}
+```
+
+### Webseeds
+
+`TorrentField.webseeds` is the plain list of webseed URLs every daemon reports.
+Transmission 4.2 added `webseeds_ex`, which carries each URL together with its live
+state; the library exposes it as `Torrent.webseedsEx`, a `List<Webseed>`.
+
+```dart
+for (final webseed in detail.webseedsEx ?? const <Webseed>[]) {
+  print('${webseed.url}'
+      ' downloading=${webseed.isDownloading}'
+      ' ${webseed.downloadBytesPerSecond} B/s');
+}
+```
+
+Older daemons simply omit the field and `webseedsEx` stays null, so fall back to
+`Torrent.webseeds` when you need to support them.
+
+## Adding a torrent
+
+`addTorrent` takes either a `filename` — a local path on the daemon's machine, an HTTP
+URL, or a magnet link — or base64-encoded `.torrent` contents in `metainfo`. It answers
+with an `AddTorrentResult`.
+
+```dart
+final result = await transmission.addTorrent(
+  filename: 'magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c',
+);
+
+print(result.torrent.id);          // the id the daemon gave it
+print(result.torrent.name);        // its name
+print(result.torrent.hashString);  // its info hash
+print(result.isDuplicate);         // false — it really was added
+```
+
+`AddTorrentResult.torrent` is a `Torrent` with only `id`, `name` and `hashString`
+populated — that is all `torrent-add` answers with. Call `torrents()` afterwards when you
+need the rest.
+
+### Duplicates
+
+Adding a torrent the daemon already has is not an error: the call succeeds, `isDuplicate`
+is `true`, and `torrent` describes the existing torrent rather than a new one.
+
+```dart
+final result = await transmission.addTorrent(
+  filename: 'magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c',
+);
+
+if (result.isDuplicate) {
+  print('Already in the list as #${result.torrent.id}');
+} else {
+  print('Added as #${result.torrent.id}');
+}
+```
+
+### Other sources
+
+```dart
+// URL, or a path on the daemon's filesystem
+final result = await transmission.addTorrent(
+  filename: 'https://example.org/releases/ubuntu.torrent',
+  downloadDir: '/mnt/media/iso',
+);
+```
+
+```dart
+import 'dart:convert';
+import 'dart:io';
+
+// A .torrent file on *this* machine: read it and send its bytes.
+final bytes = await File('/home/me/ubuntu.torrent').readAsBytes();
+
+final result = await transmission.addTorrent(
+  metainfo: base64Encode(bytes),
+  downloadDir: '/mnt/media/iso',
+  paused: true,
+  labels: ['iso', 'linux'],
+);
+```
+
+A file *inside* a torrent — what `TorrentField.files` returns — is a `TorrentFile`, named
+so it does not collide with `dart:io`'s `File`.
+
+Other optional arguments: `cookies`, `peerLimit`, `bandwidthPriority`, `filesWanted` and
+`filesUnwanted` (both `List<int>` of file indices), `priorityHigh`, `priorityLow`,
+`priorityNormal`, and `sequentialDownloadFromPiece` (Transmission 4.1+). Only the non-null
+ones are sent.
+
+## Removing torrents
+
+```dart
+// Remove from the list, keep the downloaded files.
+await transmission.removeTorrents([12, 13]);
+
+// Remove and delete the data from disk.
+await transmission.removeTorrents([12], deleteLocalData: true);
+```
+
+## Moving torrents
+
+`move: true` relocates the data; `move: false` (the default) tells the daemon the data is
+already at `location` and it should simply look for it there.
+
+```dart
+// Actually move the files.
+await transmission.moveTorrents([12], location: '/mnt/archive', move: true);
+
+// The files were moved by hand; just point the daemon at them.
+await transmission.moveTorrents([12], location: '/mnt/archive');
+```
+
+## Renaming
+
+`renameTorrent` renames `path` — a path relative to the torrent's root, or the root name
+itself — to `name`.
+
+```dart
+// Rename the torrent's top-level folder.
+await transmission.renameTorrent(
+  [12],
+  path: 'ubuntu-24.04-desktop-amd64',
+  name: 'ubuntu-desktop',
+);
+
+// Rename a file inside it.
+await transmission.renameTorrent(
+  [12],
+  path: 'ubuntu-desktop/readme.txt',
+  name: 'README.txt',
+);
+```
+
+## Start, stop, verify, reannounce
+
+```dart
+await transmission.startTorrents([12, 13]);    // respects the download queue
+await transmission.startTorrentsNow([12]);     // jumps the queue
+await transmission.stopTorrents([12, 13]);
+await transmission.verifyTorrents([12]);       // re-check local data
+await transmission.reannounceTorrents([12]);   // ask trackers again now
+```
+
+## Queue order
+
+```dart
+await transmission.moveQueueOnTop([12]);
+await transmission.moveQueueUp([13]);
+await transmission.moveQueueDown([13]);
+await transmission.moveQueueOnBottom([14]);
+```
+
+A torrent's current position is `TorrentField.queuePosition`, and `setTorrents` can set it
+directly.
+
+## Changing torrent settings
+
+`setTorrents` sends only the arguments you pass; everything left null is untouched.
+
+```dart
+// Per-torrent speed limits, in KB/s.
+await transmission.setTorrents(
+  ids: [12],
+  downloadLimit: 500,
+  downloadLimited: true,
+  uploadLimit: 100,
+  uploadLimited: true,
+);
+```
+
+```dart
+// Labels, seeding policy and queue position.
+await transmission.setTorrents(
+  ids: [12],
+  labels: ['archive', 'keep'],
+  seedRatioLimit: 2.0,
+  seedRatioMode: 1, // 0 = global, 1 = this limit, 2 = unlimited
+  queuePosition: 0,
+);
+```
+
+```dart
+// Assign the torrent to a bandwidth group (Transmission 4.0+).
+await transmission.setTorrents(ids: [12], group: 'night');
+```
+
+```dart
+// Replace the tracker list wholesale (Transmission 4.0+):
+// one announce URL per line, a blank line between tiers.
+await transmission.setTorrents(
+  ids: [12],
+  trackerList: 'https://tracker.one/announce\n\nhttps://tracker.two/announce',
+);
+```
+
+`trackerAdd`, `trackerRemove` and `trackerReplace` are still accepted but deprecated: they
+were removed in Transmission 4.0 in favour of `trackerList`.
+
+```dart
+// Which files to download, by index into the torrent's `files` array.
+await transmission.setTorrents(
+  ids: [12],
+  filesWanted: [0, 1, 2],
+  filesUnwanted: [3],
+);
+```
+
+```dart
+// Sequential download (Transmission 4.1+), optionally from a given piece.
+await transmission.setTorrents(
+  ids: [12],
+  sequentialDownload: true,
+  sequentialDownloadFromPiece: 0,
+);
+```
+
+Other arguments: `bandwidthPriority`, `honorsSessionLimits`, `location`, `peerLimit`,
+`priorityHigh`, `priorityLow`, `priorityNormal`, `seedIdleLimit`, `seedIdleMode`.

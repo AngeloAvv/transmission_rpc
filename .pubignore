@@ -1,0 +1,9 @@
+# Documentation sources for docs.page; not shipped in the published package.
+docs/
+docs.json
+
+# Editor and tooling files.
+.idea/
+.fvm/
+.fvmrc
+*.iml

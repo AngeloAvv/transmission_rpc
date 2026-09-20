@@ -1,0 +1,62 @@
+---
+title: transmission_rpc
+description: A dependency-light Dart RPC client for the Transmission BitTorrent daemon, speaking both the legacy protocol and the JSON-RPC 2.0 one of Transmission 4.1+.
+---
+
+# transmission_rpc
+
+`transmission_rpc` talks to a [Transmission](https://transmissionbt.com) BitTorrent
+daemon over its RPC interface. You create one `Transmission` object and call methods on
+it — the library works out which protocol dialect the daemon speaks and adapts both the
+requests it sends and the responses it parses.
+
+## Features
+
+- **One API, every daemon.** Transmission 2.x, 3.x, 4.0 and 4.1+ are all handled by the
+  same code. See [Compatibility](/compatibility).
+- **No code generation.** Plain Dart classes and hand-written parsing; nothing to run
+  `build_runner` for, nothing generated to check in.
+- **Dependency-light.** Only `dio`, `talker` and `talker_dio_logger`.
+- **Typed models.** `Torrent` (with `TorrentFile`, `FileStats`, `Peer`, `PeersFrom`,
+  `Webseed`, `Tracker`, `TrackerStats`), `Session`, `SessionStats`, `FreeSpace`,
+  `TestPort`, `Group`, with enums for torrent status, encryption policy and IP protocol.
+- **Current with 4.1 and 4.2.** Sequential download from a given piece, the `webseeds_ex`
+  webseed list, peer ids, holepunch support and tracker downloader counts — see
+  [Torrents](/torrents).
+- **Typed errors.** A sealed `TransmissionException` hierarchy you can `switch` over —
+  see [Errors](/errors).
+- **Selective field fetching.** Ask for exactly the `TorrentField`s you need.
+- **CSRF handled for you.** The `X-Transmission-Session-Id` handshake is transparent.
+- **Logging off by default.** Pass a `logLevel` when you want it.
+
+## Install
+
+```yaml
+dependencies:
+  transmission_rpc: ^1.0.0
+```
+
+```sh
+dart pub add transmission_rpc
+```
+
+## Quickstart
+
+```dart
+import 'package:transmission_rpc/transmission_rpc.dart';
+
+Future<void> main() async {
+  final transmission = Transmission(
+    baseUrl: 'http://localhost:9091/transmission/rpc',
+  );
+
+  final session = await transmission.session();
+  print('Transmission ${session.version} (RPC ${transmission.rpcVersion})');
+
+  for (final torrent in await transmission.torrents()) {
+    print('${torrent.name} — ${((torrent.percentDone ?? 0) * 100).round()}%');
+  }
+}
+```
+
+Next: [Getting started](/getting-started).

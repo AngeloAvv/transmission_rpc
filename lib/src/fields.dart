@@ -1,0 +1,121 @@
+import 'package:transmission_rpc/src/keys/torrent_keys.dart';
+import 'package:transmission_rpc/src/keys/wire_key.dart';
+
+/// A field that can be requested from `torrent-get`.
+///
+/// Each value carries the [WireKey] holding both protocol spellings, so the
+/// caller never has to know which dialect the connected daemon speaks.
+enum TorrentField {
+  activityDate(TorrentKeys.activityDate),
+  addedDate(TorrentKeys.addedDate),
+  availability(TorrentKeys.availability),
+  bandwidthPriority(TorrentKeys.bandwidthPriority),
+  comment(TorrentKeys.comment),
+  corruptEver(TorrentKeys.corruptEver),
+  creator(TorrentKeys.creator),
+  dateCreated(TorrentKeys.dateCreated),
+  desiredAvailable(TorrentKeys.desiredAvailable),
+  doneDate(TorrentKeys.doneDate),
+  downloadDir(TorrentKeys.downloadDir),
+  downloadedEver(TorrentKeys.downloadedEver),
+  downloadLimit(TorrentKeys.downloadLimit),
+  downloadLimited(TorrentKeys.downloadLimited),
+  editDate(TorrentKeys.editDate),
+  error(TorrentKeys.error),
+  errorString(TorrentKeys.errorString),
+  eta(TorrentKeys.eta),
+  etaIdle(TorrentKeys.etaIdle),
+  fileCount(TorrentKeys.fileCount),
+  files(TorrentKeys.files),
+  fileStats(TorrentKeys.fileStats),
+  group(TorrentKeys.group),
+  hashString(TorrentKeys.hashString),
+  haveUnchecked(TorrentKeys.haveUnchecked),
+  haveValid(TorrentKeys.haveValid),
+  honorsSessionLimits(TorrentKeys.honorsSessionLimits),
+  id(TorrentKeys.id),
+  isFinished(TorrentKeys.isFinished),
+  isPrivate(TorrentKeys.isPrivate),
+  isStalled(TorrentKeys.isStalled),
+  labels(TorrentKeys.labels),
+  leftUntilDone(TorrentKeys.leftUntilDone),
+  magnetLink(TorrentKeys.magnetLink),
+  manualAnnounceTime(TorrentKeys.manualAnnounceTime),
+  maxConnectedPeers(TorrentKeys.maxConnectedPeers),
+  metadataPercentComplete(TorrentKeys.metadataPercentComplete),
+  name(TorrentKeys.name),
+  peerLimit(TorrentKeys.peerLimit),
+  peers(TorrentKeys.peers),
+  peersConnected(TorrentKeys.peersConnected),
+  peersFrom(TorrentKeys.peersFrom),
+  peersGettingFromUs(TorrentKeys.peersGettingFromUs),
+  peersSendingToUs(TorrentKeys.peersSendingToUs),
+  percentComplete(TorrentKeys.percentComplete),
+  percentDone(TorrentKeys.percentDone),
+  pieces(TorrentKeys.pieces),
+  pieceCount(TorrentKeys.pieceCount),
+  pieceSize(TorrentKeys.pieceSize),
+  priorities(TorrentKeys.priorities),
+  primaryMimeType(TorrentKeys.primaryMimeType),
+  queuePosition(TorrentKeys.queuePosition),
+  rateDownload(TorrentKeys.rateDownload),
+  rateUpload(TorrentKeys.rateUpload),
+  recheckProgress(TorrentKeys.recheckProgress),
+  secondsDownloading(TorrentKeys.secondsDownloading),
+  secondsSeeding(TorrentKeys.secondsSeeding),
+  seedIdleLimit(TorrentKeys.seedIdleLimit),
+  seedIdleMode(TorrentKeys.seedIdleMode),
+  seedRatioLimit(TorrentKeys.seedRatioLimit),
+  seedRatioMode(TorrentKeys.seedRatioMode),
+  sequentialDownload(TorrentKeys.sequentialDownload),
+  sequentialDownloadFromPiece(TorrentKeys.sequentialDownloadFromPiece),
+  sizeWhenDone(TorrentKeys.sizeWhenDone),
+  startDate(TorrentKeys.startDate),
+  status(TorrentKeys.status),
+  totalSize(TorrentKeys.totalSize),
+  torrentFile(TorrentKeys.torrentFile),
+  trackerList(TorrentKeys.trackerList),
+  trackers(TorrentKeys.trackers),
+  trackerStats(TorrentKeys.trackerStats),
+  uploadedEver(TorrentKeys.uploadedEver),
+  uploadLimit(TorrentKeys.uploadLimit),
+  uploadLimited(TorrentKeys.uploadLimited),
+  uploadRatio(TorrentKeys.uploadRatio),
+  wanted(TorrentKeys.wanted),
+  webseeds(TorrentKeys.webseeds),
+  webseedsEx(TorrentKeys.webseedsEx),
+  webseedsSendingToUs(TorrentKeys.webseedsSendingToUs);
+
+  /// Both protocol spellings of this field.
+  final WireKey key;
+
+  const TorrentField(this.key);
+
+  /// The field name to request from a server speaking [rpcVersion].
+  String wireName(int rpcVersion) => key.forVersion(rpcVersion);
+
+  /// Fields requested by `torrents()` and `activeTorrents()` when the caller
+  /// does not pass a list.
+  static const defaults = <TorrentField>[
+    TorrentField.id,
+    TorrentField.name,
+    TorrentField.eta,
+    TorrentField.queuePosition,
+    TorrentField.downloadDir,
+    TorrentField.isFinished,
+    TorrentField.isStalled,
+    TorrentField.leftUntilDone,
+    TorrentField.metadataPercentComplete,
+    TorrentField.error,
+    TorrentField.errorString,
+    TorrentField.percentDone,
+    TorrentField.totalSize,
+    TorrentField.peersConnected,
+    TorrentField.sizeWhenDone,
+    TorrentField.status,
+    TorrentField.rateDownload,
+    TorrentField.rateUpload,
+    TorrentField.peersGettingFromUs,
+    TorrentField.peersSendingToUs,
+  ];
+}
