@@ -294,9 +294,7 @@ class Session {
       seedQueueSize: reader.intOf(SessionKeys.seedQueueSize),
       seedRatioLimit: reader.doubleOf(SessionKeys.seedRatioLimit),
       seedRatioLimited: reader.boolOf(SessionKeys.seedRatioLimited),
-      sessionSequentialDownload: reader.boolOf(
-        SessionKeys.sequentialDownload,
-      ),
+      sessionSequentialDownload: reader.boolOf(SessionKeys.sequentialDownload),
       sessionId: reader.stringOf(SessionKeys.sessionId),
       speedLimitDownEnabled: reader.boolOf(SessionKeys.speedLimitDownEnabled),
       speedLimitDown: reader.intOf(SessionKeys.speedLimitDown),
