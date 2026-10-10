@@ -208,10 +208,7 @@ class Torrent {
       etaIdle: reader.intOf(TorrentKeys.etaIdle),
       fileCount: reader.intOf(TorrentKeys.fileCount),
       files: reader.objectListOf(TorrentKeys.files, TorrentFile.fromJson),
-      fileStats: reader.objectListOf(
-        TorrentKeys.fileStats,
-        FileStats.fromJson,
-      ),
+      fileStats: reader.objectListOf(TorrentKeys.fileStats, FileStats.fromJson),
       group: reader.stringOf(TorrentKeys.group),
       hashString: reader.stringOf(TorrentKeys.hashString),
       haveUnchecked: reader.intOf(TorrentKeys.haveUnchecked),
@@ -274,10 +271,7 @@ class Torrent {
       uploadRatio: reader.doubleOf(TorrentKeys.uploadRatio),
       wanted: _wantedOf(reader),
       webseeds: reader.listOf<String>(TorrentKeys.webseeds),
-      webseedsEx: reader.objectListOf(
-        TorrentKeys.webseedsEx,
-        Webseed.fromJson,
-      ),
+      webseedsEx: reader.objectListOf(TorrentKeys.webseedsEx, Webseed.fromJson),
       webseedsSendingToUs: reader.intOf(TorrentKeys.webseedsSendingToUs),
     );
   }
@@ -456,9 +450,7 @@ class Webseed {
     return Webseed(
       url: reader.stringOf(TorrentKeys.url),
       isDownloading: reader.boolOf(TorrentKeys.isDownloading),
-      downloadBytesPerSecond: reader.intOf(
-        TorrentKeys.downloadBytesPerSecond,
-      ),
+      downloadBytesPerSecond: reader.intOf(TorrentKeys.downloadBytesPerSecond),
     );
   }
 }

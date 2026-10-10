@@ -145,7 +145,10 @@ class Transmission {
     final torrents = result['torrents'];
     if (torrents is! List) return const [];
     return torrents
-        .map((torrent) => Torrent.fromJson(Map<String, dynamic>.from(torrent as Map)))
+        .map(
+          (torrent) =>
+              Torrent.fromJson(Map<String, dynamic>.from(torrent as Map)),
+        )
         .toList(growable: false);
   }
 
