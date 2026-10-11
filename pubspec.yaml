@@ -15,9 +15,9 @@ environment:
   sdk: ^3.8.0
 
 dependencies:
-  dio: ^5.9.2
+  dio: ^5.11.1
   talker: ^5.1.20
-  talker_dio_logger: ^5.1.16
+  talker_dio_logger: ^5.1.20
 
 dev_dependencies:
   lints: ^6.1.0
