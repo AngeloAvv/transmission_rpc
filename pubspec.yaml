@@ -16,7 +16,7 @@ environment:
 
 dependencies:
   dio: ^5.11.1
-  talker: ^5.1.21
+  talker: ^5.2.0
   talker_dio_logger: ^5.2.0
 
 dev_dependencies:
