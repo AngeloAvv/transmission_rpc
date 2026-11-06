@@ -88,6 +88,9 @@ class Transmission {
             printRequestHeaders: true,
             printResponseHeaders: true,
             printResponseMessage: true,
+            // Basic auth is only base64, not encryption: keep the credentials
+            // out of the log history. Matching is case-insensitive.
+            hiddenHeaders: {HttpHeaders.authorizationHeader},
           ),
         ),
       );

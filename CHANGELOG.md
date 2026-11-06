@@ -2,6 +2,10 @@
 
 - `torrents()` takes an optional `ids` list to fetch specific torrents instead of all of
   them. An empty list returns an empty list without calling the daemon.
+- The `Authorization` header is no longer written to the log. With a `logLevel` set, the
+  Basic auth header used to land in the Talker history as base64 — readable credentials for
+  anyone who shares or exports the logs. It is now masked; the other request headers,
+  including `X-Transmission-Session-Id`, are still logged. (#18)
 
 ## 1.0.0
 
