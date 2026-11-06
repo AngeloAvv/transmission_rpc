@@ -51,6 +51,7 @@ To fetch heavy detail for a single torrent's screen, add the expensive fields ex
 
 ```dart
 final detailed = await transmission.torrents(
+  ids: [7], // only the torrent being shown
   fields: [
     ...TorrentField.defaults,
     TorrentField.files,

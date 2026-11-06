@@ -56,7 +56,9 @@ void main() {
       final h = buildClient();
       h.mock.respondWith(
         legacySuccess({
-          'torrents': [torrentPayload],
+          'torrents': [
+            {...torrentPayload, 'id': 7},
+          ],
         }),
       );
 
@@ -64,14 +66,17 @@ void main() {
 
       expectCall(h.mock, 'torrent-get');
       expect(h.mock.lastArguments['ids'], [7]);
-      expect(torrents, hasLength(1));
+      expect(torrents.map((torrent) => torrent.id), [7]);
     });
 
     test('sends the ids in the v18 dialect too', () async {
       final h = await buildV18Client();
       h.mock.respondWith(
         v18Success({
-          'torrents': [torrentPayload],
+          'torrents': [
+            {...torrentPayload, 'id': 7},
+            {...torrentPayload, 'id': 9},
+          ],
         }),
       );
 
@@ -79,7 +84,7 @@ void main() {
 
       expect(h.mock.lastMethod, 'torrent_get');
       expect(h.mock.lastArguments['ids'], [7, 9]);
-      expect(torrents, hasLength(1));
+      expect(torrents.map((torrent) => torrent.id), [7, 9]);
     });
 
     test('sends no ids key when ids is null, in both dialects', () async {
