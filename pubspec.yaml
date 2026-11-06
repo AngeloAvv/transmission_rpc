@@ -2,7 +2,7 @@ name: transmission_rpc
 description: >-
   A dependency-light RPC client for the Transmission BitTorrent daemon, working
   with both the legacy protocol and the JSON-RPC 2.0 one of Transmission 4.1+.
-version: 1.0.0
+version: 1.1.0
 repository: https://github.com/AngeloAvv/transmission_rpc
 
 topics:

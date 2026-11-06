@@ -83,6 +83,19 @@ final label = switch (torrent.status) {
 
 ### Only what changed
 
+To fetch only some torrents, pass their numeric `ids` — the same ones `startTorrents`,
+`stopTorrents` and the other action methods take. This is what a detail screen should do
+when it polls heavy fields such as `files` or `peers` for a single torrent. `ids: null`
+(the default) fetches everything, and an empty list returns an empty list without calling
+the daemon.
+
+```dart
+final detail = (await transmission.torrents(
+  ids: [7],
+  fields: [TorrentField.id, TorrentField.files, TorrentField.peers],
+)).firstOrNull;
+```
+
 `activeTorrents()` uses the daemon's `recently-active` filter and returns the torrents
 that changed since the previous call. It takes the same `fields` argument and is the
 cheap way to keep a live list up to date.

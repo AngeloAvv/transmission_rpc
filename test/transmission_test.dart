@@ -52,6 +52,61 @@ void main() {
       },
     );
 
+    test('sends the ids it was asked for and returns only those', () async {
+      final h = buildClient();
+      h.mock.respondWith(
+        legacySuccess({
+          'torrents': [torrentPayload],
+        }),
+      );
+
+      final torrents = await h.client.torrents(ids: [7]);
+
+      expectCall(h.mock, 'torrent-get');
+      expect(h.mock.lastArguments['ids'], [7]);
+      expect(torrents, hasLength(1));
+    });
+
+    test('sends the ids in the v18 dialect too', () async {
+      final h = await buildV18Client();
+      h.mock.respondWith(
+        v18Success({
+          'torrents': [torrentPayload],
+        }),
+      );
+
+      final torrents = await h.client.torrents(ids: [7, 9]);
+
+      expect(h.mock.lastMethod, 'torrent_get');
+      expect(h.mock.lastArguments['ids'], [7, 9]);
+      expect(torrents, hasLength(1));
+    });
+
+    test('sends no ids key when ids is null, in both dialects', () async {
+      final legacy = buildClient();
+      legacy.mock.respondWith(legacySuccess({'torrents': []}));
+      await legacy.client.torrents();
+      expect(legacy.mock.lastArguments.containsKey('ids'), isFalse);
+
+      final modern = await buildV18Client();
+      modern.mock.respondWith(v18Success({'torrents': []}));
+      await modern.client.torrents();
+      expect(modern.mock.lastArguments.containsKey('ids'), isFalse);
+    });
+
+    test(
+      'returns an empty list without calling the daemon for empty ids',
+      () async {
+        final legacy = buildClient();
+        expect(await legacy.client.torrents(ids: []), isEmpty);
+        expect(legacy.mock.requestCount, 0);
+
+        final modern = await buildV18Client();
+        expect(await modern.client.torrents(ids: []), isEmpty);
+        expect(modern.mock.requestCount, 0);
+      },
+    );
+
     test('sends only the fields it was asked for', () async {
       final h = buildClient();
       h.mock.respondWith(legacySuccess({'torrents': []}));

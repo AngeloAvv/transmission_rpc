@@ -116,9 +116,20 @@ class Transmission {
   // ---------------------------------------------------------------------------
 
   /// Returns the torrents known to the daemon, each carrying [fields].
+  ///
+  /// Pass [ids] to fetch only those torrents — the same numeric ids the action
+  /// methods such as [startTorrents] take. That keeps a detail screen polling
+  /// heavy fields (`files`, `peers`, `trackerStats`, …) from downloading them
+  /// for every torrent. Ids the daemon does not know are left out of the
+  /// result. Leave [ids] null for all torrents; an empty list returns an empty
+  /// list without calling the daemon.
   Future<List<Torrent>> torrents({
     List<TorrentField> fields = TorrentField.defaults,
-  }) => _torrents(fields, null);
+    List<int>? ids,
+  }) async {
+    if (ids != null && ids.isEmpty) return const [];
+    return _torrents(fields, ids);
+  }
 
   /// Returns the torrents that changed since the previous call, plus the ids of
   /// the ones that were removed being dropped — the daemon's `recently-active`

@@ -1,3 +1,8 @@
+## 1.1.0
+
+- `torrents()` takes an optional `ids` list to fetch specific torrents instead of all of
+  them. An empty list returns an empty list without calling the daemon.
+
 ## 1.0.0
 
 First release.
