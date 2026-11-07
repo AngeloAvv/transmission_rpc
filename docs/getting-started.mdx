@@ -79,6 +79,10 @@ final transmission = Transmission(
 );
 ```
 
+Request and response headers are logged to help diagnose RPC issues. The
+`Authorization` request header is masked, but response headers are not masked.
+Review logs for sensitive data before sharing them.
+
 > **Note:** `talker` alone does nothing — logging stays off until `logLevel` is non-null.
 > Only `LogLevel` is re-exported; the `Talker` class itself comes from
 > `package:talker/talker.dart`, which you already depend on in that case.
