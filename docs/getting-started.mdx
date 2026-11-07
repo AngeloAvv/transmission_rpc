@@ -79,9 +79,9 @@ final transmission = Transmission(
 );
 ```
 
-Request and response headers are logged to help diagnose RPC issues, except the
-`Authorization` header, which is masked so your credentials never end up in the log
-history.
+Request and response headers are logged to help diagnose RPC issues. The
+`Authorization` request header is masked, but response headers are not masked.
+Review logs for sensitive data before sharing them.
 
 > **Note:** `talker` alone does nothing — logging stays off until `logLevel` is non-null.
 > Only `LogLevel` is re-exported; the `Talker` class itself comes from
